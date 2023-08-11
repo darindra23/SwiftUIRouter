@@ -28,48 +28,50 @@ import SwiftUI
 ///
 /// - Note: A Router's base path (root) is always `/`.
 public struct Router<Content: View>: View {
-	@StateObject private var navigator: Navigator
-	private let content: Content
+    @Backport.StateObject
+    private var navigator: Navigator
+    private let content: Content
 
-	/// Initialize a Router environment.
-	/// - Parameter initialPath: The initial path the `Router` should start at once initialized.
-	/// - Parameter content: Content views to render inside the Router environment.
-	public init(initialPath: String = "/", @ViewBuilder content: () -> Content) {
-		_navigator = StateObject(wrappedValue: Navigator(initialPath: initialPath))
-		self.content = content()
-	}
-	
-	/// Initialize a Router environment.
-	///
-	/// Provide an already initialized instance of `Navigator` to use inside a Router environment.
-	///
-	/// - Important: This is considered an advanced usecase for *SwiftUI Router* used only for specific design patterns.
-	/// It is stronlgy adviced to use the `init(initialPath:content:)` initializer instead.
-	///
-	/// - Parameter navigator: A pre-initialized instance of `Navigator`.
-	/// - Parameter content: Content views to render inside the Router environment.
-	public init(navigator: Navigator, @ViewBuilder content: () -> Content) {
-		_navigator = StateObject(wrappedValue: navigator)
-		self.content = content()
-	}
-	
-	public var body: some View {
-		content
-			.environmentObject(navigator)
-			.environmentObject(SwitchRoutesEnvironment())
-			.environment(\.relativePath, "/")
-	}
+    /// Initialize a Router environment.
+    /// - Parameter initialPath: The initial path the `Router` should start at once initialized.
+    /// - Parameter content: Content views to render inside the Router environment.
+    public init(initialPath: String = "/", @ViewBuilder content: () -> Content) {
+        _navigator = Backport.StateObject(wrappedValue: Navigator(initialPath: initialPath))
+        self.content = content()
+    }
+
+    /// Initialize a Router environment.
+    ///
+    /// Provide an already initialized instance of `Navigator` to use inside a Router environment.
+    ///
+    /// - Important: This is considered an advanced usecase for *SwiftUI Router* used only for specific design patterns.
+    /// It is stronlgy adviced to use the `init(initialPath:content:)` initializer instead.
+    ///
+    /// - Parameter navigator: A pre-initialized instance of `Navigator`.
+    /// - Parameter content: Content views to render inside the Router environment.
+    public init(navigator: Navigator, @ViewBuilder content: () -> Content) {
+        _navigator = Backport.StateObject(wrappedValue: navigator)
+        self.content = content()
+    }
+
+    public var body: some View {
+        content
+            .environmentObject(navigator)
+            .environmentObject(SwitchRoutesEnvironment())
+            .environment(\.relativePath, "/")
+    }
 }
 
 // MARK: - Relative path environment key
+
 struct RelativeRouteEnvironment: EnvironmentKey {
-	static var defaultValue = "/"
+    static var defaultValue = "/"
 }
 
 public extension EnvironmentValues {
-	/// The current relative path of the closest `Route`.
-	internal(set) var relativePath: String {
-		get { self[RelativeRouteEnvironment.self] }
-		set { self[RelativeRouteEnvironment.self] = newValue }
-	}
+    /// The current relative path of the closest `Route`.
+    internal(set) var relativePath: String {
+        get { self[RelativeRouteEnvironment.self] }
+        set { self[RelativeRouteEnvironment.self] = newValue }
+    }
 }
