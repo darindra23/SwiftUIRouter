@@ -63,123 +63,130 @@ import SwiftUI
 ///
 /// - Note: A `Route`'s default path is `*`, meaning it will always match.
 public struct Route<ValidatedData, Content: View>: View {
+    public typealias Validator = (RouteInformation) -> ValidatedData?
 
-	public typealias Validator = (RouteInformation) -> ValidatedData?
+    @Environment(\.relativePath)
+    private var relativePath
 
-	@Environment(\.relativePath) private var relativePath
-	@EnvironmentObject private var navigator: Navigator
-	@EnvironmentObject private var switchEnvironment: SwitchRoutesEnvironment
-	@StateObject private var pathMatcher = PathMatcher()
+    @EnvironmentObject
+    private var navigator: Navigator
 
-	private let content: (ValidatedData) -> Content
-	private let path: String
-	private let validator: Validator
+    @EnvironmentObject
+    private var switchEnvironment: SwitchRoutesEnvironment
 
-	/// - Parameter path: A path glob to test with the current path. See documentation for `Route`.
-	/// - Parameter validator: A function that validates and transforms the route parameters.
-	/// - Parameter content: Views to render. The validated data is passed as an argument.
-	public init(
-		_ path: String = "*",
-		validator: @escaping Validator,
-		@ViewBuilder content: @escaping (ValidatedData) -> Content
-	) {
-		self.content = content
-		self.path = path
-		self.validator = validator
-	}
+    @Backport.StateObject
+    private var pathMatcher = PathMatcher()
 
-	@available(*, deprecated, renamed: "init(_:validator:content:)")
-	public init(
-		path: String,
-		validator: @escaping Validator,
-		@ViewBuilder content: @escaping (ValidatedData) -> Content
-	) {
-		self.init(path, validator: validator, content: content)
-	}
+    private let content: (ValidatedData) -> Content
+    private let path: String
+    private let validator: Validator
 
-	public var body: some View {
-		var validatedData: ValidatedData?
-		var routeInformation: RouteInformation?
+    /// - Parameter path: A path glob to test with the current path. See documentation for `Route`.
+    /// - Parameter validator: A function that validates and transforms the route parameters.
+    /// - Parameter content: Views to render. The validated data is passed as an argument.
+    public init(
+        _ path: String = "*",
+        validator: @escaping Validator,
+        @ViewBuilder content: @escaping (ValidatedData) -> Content
+    ) {
+        self.content = content
+        self.path = path
+        self.validator = validator
+    }
 
-		if !switchEnvironment.isActive || (switchEnvironment.isActive && !switchEnvironment.isResolved) {
-			do {
-				if let matchInformation = try pathMatcher.match(
-					glob: path,
-					with: navigator.path,
-					relative: relativePath),
-				   let validated = validator(matchInformation)
-				{
-					validatedData = validated
-					routeInformation = matchInformation
+    @available(*, deprecated, renamed: "init(_:validator:content:)")
+    public init(
+        path: String,
+        validator: @escaping Validator,
+        @ViewBuilder content: @escaping (ValidatedData) -> Content
+    ) {
+        self.init(path, validator: validator, content: content)
+    }
 
-					if switchEnvironment.isActive {
-						switchEnvironment.isResolved = true
-					}
-				}
-			}
-			catch {
-				fatalError("Unable to compile path glob '\(path)' to Regex. Error: \(error)")
-			}
-		}
+    public var body: some View {
+        var validatedData: ValidatedData?
+        var routeInformation: RouteInformation?
 
-		return Group {
-			if let validatedData = validatedData,
-			   let routeInformation = routeInformation
-			{
-				content(validatedData)
-					.environment(\.relativePath, routeInformation.path)
-					.environmentObject(routeInformation)
-					.environmentObject(SwitchRoutesEnvironment())
-			}
-		}
-	}
+        if !switchEnvironment.isActive || (switchEnvironment.isActive && !switchEnvironment.isResolved) {
+            do {
+                if let matchInformation = try pathMatcher.match(
+                    glob: path,
+                    with: navigator.path,
+                    relative: relativePath
+                ),
+                    let validated = validator(matchInformation)
+                {
+                    validatedData = validated
+                    routeInformation = matchInformation
+
+                    if switchEnvironment.isActive {
+                        switchEnvironment.isResolved = true
+                    }
+                }
+            } catch {
+                fatalError("Unable to compile path glob '\(path)' to Regex. Error: \(error)")
+            }
+        }
+
+        return Group {
+            if let validatedData = validatedData,
+               let routeInformation = routeInformation
+            {
+                content(validatedData)
+                    .environment(\.relativePath, routeInformation.path)
+                    .environmentObject(routeInformation)
+                    .environmentObject(SwitchRoutesEnvironment())
+            }
+        }
+    }
 }
 
 public extension Route where ValidatedData == RouteInformation {
-	/// - Parameter path: A path glob to test with the current path. See documentation for `Route`.
-	/// - Parameter content: Views to render. An `RouteInformation` is passed containing route parameters.
-	init(_ path: String = "*", @ViewBuilder content: @escaping (RouteInformation) -> Content) {
-		self.path = path
-		self.validator = { $0 }
-		self.content = content
-	}
+    /// - Parameter path: A path glob to test with the current path. See documentation for `Route`.
+    /// - Parameter content: Views to render. An `RouteInformation` is passed containing route parameters.
+    init(_ path: String = "*", @ViewBuilder content: @escaping (RouteInformation) -> Content) {
+        self.path = path
+        validator = { $0 }
+        self.content = content
+    }
 
-	/// - Parameter path: A path glob to test with the current path. See documentation for `Route`.
-	/// - Parameter content: Views to render.
-	init(_ path: String = "*", @ViewBuilder content: @escaping () -> Content) {
-		self.path = path
-		self.validator = { $0 }
-		self.content = { _ in content() }
-	}
+    /// - Parameter path: A path glob to test with the current path. See documentation for `Route`.
+    /// - Parameter content: Views to render.
+    init(_ path: String = "*", @ViewBuilder content: @escaping () -> Content) {
+        self.path = path
+        validator = { $0 }
+        self.content = { _ in content() }
+    }
 
-	/// - Parameter path: A path glob to test with the current path. See documentation for `Route`.
-	/// - Parameter content: View to render (autoclosure).
-	init(_ path: String = "*", content: @autoclosure @escaping () -> Content) {
-		self.path = path
-		self.validator = { $0 }
-		self.content = { _ in content() }
-	}
+    /// - Parameter path: A path glob to test with the current path. See documentation for `Route`.
+    /// - Parameter content: View to render (autoclosure).
+    init(_ path: String = "*", content: @autoclosure @escaping () -> Content) {
+        self.path = path
+        validator = { $0 }
+        self.content = { _ in content() }
+    }
 
-	// MARK: - Deprecated initializers.
-	// These will be completely removed in a future version.
-	@available(*, deprecated, renamed: "init(_:content:)")
-	init(path: String, @ViewBuilder content: @escaping (RouteInformation) -> Content) {
-		self.init(path, content: content)
-	}
+    // MARK: - Deprecated initializers.
 
-	@available(*, deprecated, renamed: "init(_:content:)")
-	init(path: String, @ViewBuilder content: @escaping () -> Content) {
-		self.init(path, content: content)
-	}
+    // These will be completely removed in a future version.
+    @available(*, deprecated, renamed: "init(_:content:)")
+    init(path: String, @ViewBuilder content: @escaping (RouteInformation) -> Content) {
+        self.init(path, content: content)
+    }
 
-	@available(*, deprecated, renamed: "init(_:content:)")
-	init(path: String, content: @autoclosure @escaping () -> Content) {
-		self.init(path, content: content)
-	}
+    @available(*, deprecated, renamed: "init(_:content:)")
+    init(path: String, @ViewBuilder content: @escaping () -> Content) {
+        self.init(path, content: content)
+    }
+
+    @available(*, deprecated, renamed: "init(_:content:)")
+    init(path: String, content: @autoclosure @escaping () -> Content) {
+        self.init(path, content: content)
+    }
 }
 
-
 // MARK: -
+
 /// Information passed to the contents of a `Route`. As well as accessible as an environment object
 /// inside the hierarchy of a `Route`.
 /// ```swift
@@ -188,142 +195,142 @@ public extension Route where ValidatedData == RouteInformation {
 /// This object contains the resolved parameters (variables) of the `Route`'s path, as well as the relative path
 /// for all views inside the hierarchy.
 public final class RouteInformation: ObservableObject {
-	/// The resolved path component of the parent `Route`. For internal use only, at the moment.
-	let matchedPath: String
+    /// The resolved path component of the parent `Route`. For internal use only, at the moment.
+    let matchedPath: String
 
-	/// The current relative path.
-	public let path: String
+    /// The current relative path.
+    public let path: String
 
-	/// Resolved parameters of the parent `Route`s path.
-	public let parameters: [String : String]
+    /// Resolved parameters of the parent `Route`s path.
+    public let parameters: [String: String]
 
-	init(path: String, matchedPath: String, parameters: [String : String] = [:]) {
-		self.matchedPath = matchedPath
-		self.parameters = parameters
-		self.path = path
-	}
+    init(path: String, matchedPath: String, parameters: [String: String] = [:]) {
+        self.matchedPath = matchedPath
+        self.parameters = parameters
+        self.path = path
+    }
 }
 
-
 // MARK: -
+
 /// Object that will (lazily) compile regex from the given path glob, compare it with another path and return
 /// any parsed information (like identifiers).
 final class PathMatcher: ObservableObject {
+    private struct CompiledRegex {
+        let path: String
+        let matchRegex: NSRegularExpression
+        let parameters: Set<String>
+    }
 
-	private struct CompiledRegex {
-		let path: String
-		let matchRegex: NSRegularExpression
-		let parameters: Set<String>
-	}
+    private enum CompileError: Error {
+        case badParameter(String, culprit: String)
+    }
 
-	private enum CompileError: Error {
-		case badParameter(String, culprit: String)
-	}
+    private static let variablesRegex = try! NSRegularExpression(pattern: #":([^\/\?]+)"#, options: [])
 
-	private static let variablesRegex = try! NSRegularExpression(pattern: #":([^\/\?]+)"#, options: [])
+    //
 
-	//
+    private var cached: CompiledRegex?
 
-	private var cached: CompiledRegex?
-	
-	private func compileRegex(_ glob: String) throws -> CompiledRegex {
-		if let cached = cached,
-		   cached.path == glob
-		{
-			return cached
-		}
-		
-		// Extract the variables from the glob.
-		var variables = Set<String>()
+    private func compileRegex(_ glob: String) throws -> CompiledRegex {
+        if let cached = cached,
+           cached.path == glob
+        {
+            return cached
+        }
 
-		let nsrange = NSRange(glob.startIndex..<glob.endIndex, in: glob)
-		let variableMatches = Self.variablesRegex.matches(in: glob, options: [], range: nsrange)
+        // Extract the variables from the glob.
+        var variables = Set<String>()
 
-		for match in variableMatches where match.numberOfRanges > 1 {
-			if let range = Range(match.range(at: 1), in: glob) {
-				let variable = String(glob[range])
+        let nsrange = NSRange(glob.startIndex ..< glob.endIndex, in: glob)
+        let variableMatches = Self.variablesRegex.matches(in: glob, options: [], range: nsrange)
 
-				#if DEBUG
-				// In debug mode perform an extra check whether parameters contain invalid characters or
-				// whether the parameters starts with something besides a letter.
-				if let r = variable.range(of: "(^[^a-z]|[^a-z0-9])", options: [.regularExpression, .caseInsensitive]) {
-					throw CompileError.badParameter(variable, culprit: String(variable[r]))
-				}
-				#endif
-				
-				variables.insert(variable)
-			}
-		}
+        for match in variableMatches where match.numberOfRanges > 1 {
+            if let range = Range(match.range(at: 1), in: glob) {
+                let variable = String(glob[range])
 
-		// Create a new regex that will eventually match and extract the parameters from a path.
-		let endsWithAsterisk = glob.last == "*"
-		
-		var pattern = glob
-			.replacingOccurrences(of: "^[^/]/$", with: "", options: .regularExpression) // Trailing slash.
-			.replacingOccurrences(of: #"\/?\*"#, with: "", options: .regularExpression) // Trailing asterisk.
+                #if DEBUG
+                    // In debug mode perform an extra check whether parameters contain invalid characters or
+                    // whether the parameters starts with something besides a letter.
+                    if let r = variable.range(of: "(^[^a-z]|[^a-z0-9])", options: [.regularExpression, .caseInsensitive]) {
+                        throw CompileError.badParameter(variable, culprit: String(variable[r]))
+                    }
+                #endif
 
-		for (index, variable) in variables.enumerated() {
-			let isAtRoot = index == 0 && glob.starts(with: "/:" + variable)
-			pattern = pattern.replacingOccurrences(
-				of: "/:" + variable,
-				with: (isAtRoot ? "/" : "") + "(?<\(variable)>" + (isAtRoot ? "" : "/?") + "[^/?]+)",
-				options: .regularExpression)
-		}
+                variables.insert(variable)
+            }
+        }
 
-		pattern = "^" +
-			(pattern.isEmpty ? "" : "(\(pattern))") +
-			(endsWithAsterisk ? "(/.*)?$" : "$")
+        // Create a new regex that will eventually match and extract the parameters from a path.
+        let endsWithAsterisk = glob.last == "*"
 
-		let regex = try NSRegularExpression(pattern: pattern, options: [])
+        var pattern = glob
+            .replacingOccurrences(of: "^[^/]/$", with: "", options: .regularExpression) // Trailing slash.
+            .replacingOccurrences(of: #"\/?\*"#, with: "", options: .regularExpression) // Trailing asterisk.
 
-		cached = CompiledRegex(path: glob, matchRegex: regex, parameters: variables)
+        for (index, variable) in variables.enumerated() {
+            let isAtRoot = index == 0 && glob.starts(with: "/:" + variable)
+            pattern = pattern.replacingOccurrences(
+                of: "/:" + variable,
+                with: (isAtRoot ? "/" : "") + "(?<\(variable)>" + (isAtRoot ? "" : "/?") + "[^/?]+)",
+                options: .regularExpression
+            )
+        }
 
-		return cached!
-	}
+        pattern = "^" +
+            (pattern.isEmpty ? "" : "(\(pattern))") +
+            (endsWithAsterisk ? "(/.*)?$" : "$")
 
-	func match(glob: String, with path: String, relative: String = "/") throws -> RouteInformation? {
-		let completeGlob = resolvePaths(relative, glob)
-		let compiled = try compileRegex(completeGlob)
-		
-		var nsrange = NSRange(path.startIndex..<path.endIndex, in: path)
-		let matches = compiled.matchRegex.matches(in: path, options: [], range: nsrange)
-		guard !matches.isEmpty else {
-			return nil
-		}
+        let regex = try NSRegularExpression(pattern: pattern, options: [])
 
-		var parameterValues: [String : String] = [:]
+        cached = CompiledRegex(path: glob, matchRegex: regex, parameters: variables)
 
-		if !compiled.parameters.isEmpty {
-			for variable in compiled.parameters {
-				let nsrange = matches[0].range(withName: variable)
-				if nsrange.location != NSNotFound,
-				   let range = Range(nsrange, in: path)
-				{
-					var value = String(path[range])
+        return cached!
+    }
 
-					if value.starts(with: "/") {
-						value = String(value.dropFirst())
-					}
+    func match(glob: String, with path: String, relative: String = "/") throws -> RouteInformation? {
+        let completeGlob = resolvePaths(relative, glob)
+        let compiled = try compileRegex(completeGlob)
 
-					parameterValues[variable] = value
-				}
-			}
-		}
+        var nsrange = NSRange(path.startIndex ..< path.endIndex, in: path)
+        let matches = compiled.matchRegex.matches(in: path, options: [], range: nsrange)
+        guard !matches.isEmpty else {
+            return nil
+        }
 
-		// Resolve the glob to get a new relative path.
-		// We only want the part the glob is directly referencing.
-		// I.e., if the glob is `/news/article/*` and the navigation path is `/news/article/1/details`,
-		// we only want "/news/article".
-		nsrange = matches[0].range(at: 1) // Should be the entire capture group.
-		guard nsrange.location != NSNotFound,
-			let range = Range(nsrange, in: path)
-		else {
-			return nil
-		}
+        var parameterValues: [String: String] = [:]
 
-		let resolvedGlob = String(path[range])
-		let matchedPath = String(path[relative.endIndex...])
+        if !compiled.parameters.isEmpty {
+            for variable in compiled.parameters {
+                let nsrange = matches[0].range(withName: variable)
+                if nsrange.location != NSNotFound,
+                   let range = Range(nsrange, in: path)
+                {
+                    var value = String(path[range])
 
-		return RouteInformation(path: resolvedGlob, matchedPath: matchedPath, parameters: parameterValues)
-	}
+                    if value.starts(with: "/") {
+                        value = String(value.dropFirst())
+                    }
+
+                    parameterValues[variable] = value
+                }
+            }
+        }
+
+        // Resolve the glob to get a new relative path.
+        // We only want the part the glob is directly referencing.
+        // I.e., if the glob is `/news/article/*` and the navigation path is `/news/article/1/details`,
+        // we only want "/news/article".
+        nsrange = matches[0].range(at: 1) // Should be the entire capture group.
+        guard nsrange.location != NSNotFound,
+              let range = Range(nsrange, in: path)
+        else {
+            return nil
+        }
+
+        let resolvedGlob = String(path[range])
+        let matchedPath = String(path[relative.endIndex...])
+
+        return RouteInformation(path: resolvedGlob, matchedPath: matchedPath, parameters: parameterValues)
+    }
 }
